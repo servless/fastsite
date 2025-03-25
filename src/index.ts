@@ -11,18 +11,23 @@
  * Learn more at https://developers.cloudflare.com/workers/
  */
 
+// 将 /idev/ 替换为 /idevsig/
+const replaceIdevSig = (url: string): string => {
+	return url.replace(/^\/idev\//, '/idevsig/');
+}
+
 export default {
 	async fetch(request, env, ctx): Promise<Response> {
 		const API_URL = env.WEB_URL ?? "https://github.com";
 		const url = new URL(request.url);
-		// console.log(url);
+		console.log(url);
 
 		switch (url.pathname) {
 			case "/robots.txt":
 				return new Response("User-agent: *\nDisallow: /", { status: 200 });
 			case "":
 			case "/":
-				return new Response("Hello, world!", { status: 307, headers: { "Location": "https://go.dsig.cn/servless/fastsite" } });
+				return new Response("Hello, world!", { status: 307, headers: { "Location": "https://github.com/servless/fastsite" } });
 			case "/favicon.ico":
 				return new Response("Page Not found ", { status: 404 });
 			default:
@@ -30,12 +35,16 @@ export default {
 		}
 
 		const targetUrl = new URL(API_URL);
-		targetUrl.pathname = url.pathname; // 设置路径
+		// 若目标为 /idev/ 开头，则替换为 /idevsig/
+		if (targetUrl.host === 'github.com' && url.pathname.startsWith("/idev/")) {
+			targetUrl.pathname = replaceIdevSig(url.pathname);
+		}
+
+		// targetUrl.pathname = url.pathname; // 设置路径
 		targetUrl.search = url.search;     // 合并查询参数
 		targetUrl.hash = url.hash;         // 合并片段标识符
 
-		// targetUrl.host = removeProtocol(API_URL as string);
-		console.log(targetUrl);
+		// console.log(targetUrl);
 
 		const modifiedRequest = new Request(targetUrl.toString(), {
 		  headers: request.headers,
