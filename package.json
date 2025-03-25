@@ -4,13 +4,15 @@
 	"private": true,
 	"scripts": {
 		"deploy": "wrangler deploy",
-		"dev": "wrangler dev",
+		"dev": "wrangler dev --env local",
 		"start": "wrangler dev",
+		"pages-deploy": "wrangler pages deploy pages",
+		"pages-dev": "wrangler pages dev pages",
 		"test": "vitest",
 		"cf-typegen": "wrangler types"
 	},
 	"devDependencies": {
-		"@cloudflare/vitest-pool-workers": "^0.7.5",
+		"@cloudflare/vitest-pool-workers": "0.8.4",
 		"@cloudflare/workers-types": "^4.20250321.0",
 		"typescript": "^5.5.2",
 		"vitest": "~3.0.7",

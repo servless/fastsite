@@ -4,12 +4,28 @@
  */
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
-	"name": "fastweb1",
+	"name": "fastsite",
 	"main": "src/index.ts",
 	"compatibility_date": "2025-03-21",
 	"observability": {
 		"enabled": true
-	}
+	},
+
+	/**
+	 * 本地测试环境
+	 */
+    "env": {
+        "local": {
+            "vars": {
+                "WEB_URL": "https://github.com"
+            }
+        }
+    },
+
+	"pages": {
+		"project_name": "fastsite"
+	},
+
 	/**
 	 * Smart Placement
 	 * Docs: https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement

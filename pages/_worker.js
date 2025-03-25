@@ -12,7 +12,7 @@
  */
 
 export default {
-	async fetch(request, env, ctx): Promise<Response> {
+	async fetch(request, env, ctx){
 		const API_URL = env.WEB_URL ?? "https://github.com";
 		const url = new URL(request.url);
 		// console.log(url);
@@ -48,4 +48,6 @@ export default {
 		modifiedResponse.headers.set("Access-Control-Allow-Origin", "*");
 		return modifiedResponse;
 	},
-} satisfies ExportedHandler<Env>;
+};
+
+//# sourceMappingURL=index.js.map
