@@ -1,6 +1,6 @@
 {
-	"name": "fastweb1",
-	"version": "0.0.0",
+	"name": "fastsite",
+	"version": "0.1.0",
 	"private": true,
 	"scripts": {
 		"deploy": "wrangler deploy",

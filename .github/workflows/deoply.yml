@@ -4,11 +4,14 @@ on:
   push:
     branches:
       - main
+      - dev
     paths:
       - .github/workflows/deoply.yml
       - tsconfig.json
       - package.json
-      - src/index.ts
+      - wrangler.jsonc
+      - src/**
+      - pages/**
 
 jobs:
   deploy:
@@ -20,6 +23,7 @@ jobs:
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          wranglerVersion: "4.4.0"
           command: |
             deploy
-            pages deploy pages
+            pages deploy pages --project-name fastsite
