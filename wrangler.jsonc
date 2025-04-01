@@ -5,7 +5,7 @@
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"name": "fastsite",
-	"main": "src/index.ts",
+	"main": "src/index.js",
 	"compatibility_date": "2025-03-21",
 	"observability": {
 		"enabled": true
@@ -14,13 +14,13 @@
 	/**
 	 * 本地测试环境
 	 */
-    "env": {
-        "local": {
-            "vars": {
-                "WEB_URL": "https://github.com"
-            }
-        }
-    },
+	"env": {
+    	"local": {
+    		"vars": {
+				"WEB_URL": "https://github.com"
+			}
+		}
+	},
 
 	/**
 	 * Smart Placement
