@@ -1,6 +1,6 @@
 {
 	"name": "fastsite",
-	"version": "0.1.0",
+	"version": "0.1.1",
 	"private": true,
 	"scripts": {
 		"deploy": "wrangler deploy",
@@ -9,10 +9,5 @@
 		"pages-deploy": "wrangler pages deploy pages",
 		"pages-dev": "wrangler pages dev pages",
 		"test": "vitest"
-	},
-	"devDependencies": {
-		"@cloudflare/vitest-pool-workers": "0.8.8",
-		"vitest": "3.1.1",
-		"wrangler": "^4.6.0"
 	}
 }

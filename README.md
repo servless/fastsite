@@ -2,9 +2,87 @@
 
 基于 CloudFlare Workers / Pages 的指定网站加速
 
-## 配置项目的环境变量
+## 初始化
 
-- `WEB_URL` 为要加速的网站地址。
+1. 拉取本仓库代码
+
+2. 安装模块
+```bash
+npm install -g wrangler
+```
+
+3. 初始化数据库
+
+```bash
+# 创建数据库
+wrangler d1 create fastsite
+```
+
+复制生成的数据库信息到 `wrangler.jsonc`
+```bash
+✅ Successfully created DB 'fastsite' in region WEUR
+Created your new D1 database.
+
+{
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "fastsite",
+      "database_id": "4791dbb8-a06b-4980-9992-f51c51c47f70"
+    }
+  ]
+}
+```
+
+创建数据表结构文件 `schema.sql`，并填充数据。
+
+```bash
+# 导入数据结构(本地测试)
+wrangler d1 execute fastsite --env local --local --file=./schema.sql
+# 导入数据结构(远程服务)
+wrangler d1 execute fastsite --remote --file=./schema.sql
+```
+
+- 本地测试使用 `--local`，生产环境使用 `--remote`
+```bash
+# 查询表结构
+wrangler d1 execute fastsite --local --command="pragma table_info(fastsite)"
+
+# 查询数据表
+wrangler d1 execute fastsite --local --command="SELECT * FROM fastsite"
+
+# 备份数据库
+wrangler d1 export fastsite --local --file=./fastsite.sql
+
+# 添加数据
+wrangler d1 execute fastsite --local --command="INSERT INTO fastsite (visit_url, target_url, description) VALUES ('https://mydomain.com', 'https://www.baidu.com', '百度')"
+
+# 更新数据
+wrangler d1 execute fastsite --local --command="UPDATE fastsite SET target_url = 'https://www.baidu.com' WHERE id = 1"
+
+# 删除数据
+wrangler d1 execute fastsite --local --command="DELETE FROM fastsite WHERE id = 1"
+```
+
+## 表结构说明
+
+```bash
+CREATE TABLE IF NOT EXISTS fastsite (
+    id INTEGER PRIMARY KEY, -- ID
+    visit_url TEXT NOT NULL, -- 访问地址
+    target_url TEXT NOT NULL, -- 目标地址
+    description TEXT DEFAULT '' NULL -- 描述
+);
+```
+
+1. `visit_url` 为访问的网站地址（**需要绑定域名到此服务**）。
+2. `target_url` 为加速的目标网站地址。
+3. `description` 为网站描述。
+
+## 本地测试
+```bash
+npm run dev
+```
 
 ## 部署教程 - Workers
 

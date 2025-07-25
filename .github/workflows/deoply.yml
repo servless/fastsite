@@ -22,7 +22,7 @@ jobs:
         if: secrets.CLOUDFLARE_API_TOKEN != "0"
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          wranglerVersion: "4.4.0"
+          wranglerVersion: "4.26.0"
           command: |
             deploy
             pages deploy pages --project-name fastsite

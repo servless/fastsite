@@ -3,7 +3,7 @@
  * https://developers.cloudflare.com/workers/wrangler/configuration/
  */
 {
-	"$schema": "node_modules/wrangler/config-schema.json",
+	// "$schema": "node_modules/wrangler/config-schema.json",
 	"name": "fastsite",
 	"main": "src/index.js",
 	"compatibility_date": "2025-03-21",
@@ -16,11 +16,26 @@
 	 */
 	"env": {
     	"local": {
-    		"vars": {
-				"WEB_URL": "https://github.com"
-			}
+			"d1_databases": [
+				{
+				"binding": "DB",
+				"database_name": "fastsite",
+				"database_id": "666db571-9a30-4284-bcd7-5468e37b876e"
+				}
+			]
 		}
 	},
+
+	/**
+	 * 远程生产环境
+	 */
+	"d1_databases": [
+		{
+		"binding": "DB",
+		"database_name": "fastsite",
+		"database_id": "666db571-9a30-4284-bcd7-5468e37b876e"
+		}
+	]
 
 	/**
 	 * Smart Placement
