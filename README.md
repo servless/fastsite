@@ -55,10 +55,11 @@ wrangler d1 execute fastsite --local --command="SELECT * FROM fastsite"
 wrangler d1 export fastsite --local --file=./fastsite.sql
 
 # 添加数据
-wrangler d1 execute fastsite --local --command="INSERT INTO fastsite (visit_url, target_url, description) VALUES ('https://mydomain.com', 'https://www.baidu.com', '百度')"
+wrangler d1 execute fastsite --local --command="INSERT INTO fastsite (visit_url, target_url, description) VALUES ('http://localhost:8787', ' https://dv.acme-v02.api.pki.goog', 'Google CA')"
+wrangler d1 execute fastsite --local --command="INSERT INTO fastsite (visit_url, target_url, description) VALUES ('http://127.0.0.1:8787', ' https://dv.acme-v02.test-api.pki.goog', 'Google Test CA')"
 
 # 更新数据
-wrangler d1 execute fastsite --local --command="UPDATE fastsite SET target_url = 'https://www.baidu.com' WHERE id = 1"
+wrangler d1 execute fastsite --local --command="UPDATE fastsite SET target_url = 'https://dv.acme-v02.api.pki.goog' WHERE id = 1"
 
 # 删除数据
 wrangler d1 execute fastsite --local --command="DELETE FROM fastsite WHERE id = 1"

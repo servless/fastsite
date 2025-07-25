@@ -38,10 +38,10 @@ export default {
 			const target_url = await this.get_target_url(visit_url, env);
 			// console.log(`input: ${visit_url}, output: ${target_url}`);
 			if (target_url) {
-				return target_url;
+				return [ visit_url, target_url ];
 			}
 		}
-		return null;
+		return [];
 	},
 
 	async fetch(request, env, ctx) {
@@ -70,15 +70,17 @@ export default {
 			visitUrls.push(`https://${fromUrl}`, `http://${fromUrl}`);
 		}
 
-		const visitUrl = await this.get_visit_url(visitUrls, env);
-		if (!visitUrl) {	
+		const dataArr = await this.get_visit_url(visitUrls, env);
+		if (!dataArr) {	
 			return new Response("Hello, world!", { status: 302, headers: { "Location": "https://github.com/servless/fastsite" } });
 		}
 
-		const targetUrl = new URL(visitUrl);
+		const [ visitUrl, targetUrl ] = dataArr;
+
+		const targetUrlObj = new URL(targetUrl);
 
 		// 禁止浏览器访问
-		if (disableBrowser.indexOf(targetUrl.host) === 0) {
+		if (disableBrowser.indexOf(targetUrlObj.host) === 0) {
 			const userAgent = request.headers.get('user-agent').toLowerCase();
 			// 检查是否包含 disableAgent 中的关键词
 			const containsDisableAgent = disableAgent.some(keyword => {
@@ -89,13 +91,13 @@ export default {
 			}
 		}
 
-		// targetUrl.pathname = url.pathname; // 设置路径
-		// targetUrl.search = url.search;     // 合并查询参数
-		// targetUrl.hash = url.hash;         // 合并片段标识符
+		// targetUrlObj.pathname = url.pathname; // 设置路径
+		// targetUrlObj.search = url.search;     // 合并查询参数
+		// targetUrlObj.hash = url.hash;         // 合并片段标识符
 
-		url.host = targetUrl.host;
-		url.protocol = targetUrl.protocol;
-		url.port = targetUrl.port;
+		url.host = targetUrlObj.host;
+		url.protocol = targetUrlObj.protocol;
+		url.port = targetUrlObj.port;
 		// console.log(url);
 
 		const modifiedRequest = new Request(url.toString(), {
@@ -105,9 +107,20 @@ export default {
 		  redirect: "follow"
 		});
 		// console.log(modifiedRequest);
+
 		const response = await fetch(modifiedRequest);
-		const modifiedResponse = new Response(response.body, response);
-		modifiedResponse.headers.set("Access-Control-Allow-Origin", "*");
+		let modifiedResponse = null;
+		
+		// Google CA
+		if ((url.pathname === '/directory') && (url.host === 'dv.acme-v02.api.pki.goog' || url.host === 'dv.acme-v02.test-api.pki.goog')) {
+			const text = await response.text();
+			const newText = text.replaceAll('https://dv.acme-v02.api.pki.goog', visitUrl).replaceAll('https://dv.acme-v02.test-api.pki.goog', visitUrl);
+			modifiedResponse = new Response(newText, response);
+		} else {
+			modifiedResponse = new Response(response.body, response);
+		}
+
+		modifiedResponse.headers.set("Access-Control-Allow-Origin", "*");		
 		return modifiedResponse;
 	},
 };
