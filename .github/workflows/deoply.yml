@@ -15,14 +15,16 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     name: Deploy
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}    
     steps:
       - uses: actions/checkout@v4
       - name: Deploy
         uses: cloudflare/wrangler-action@v3
-        if: secrets.CLOUDFLARE_API_TOKEN != 'false'
+        if: env.CLOUDFLARE_API_TOKEN != 'false'
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          wranglerVersion: "4.26.0"
+          wranglerVersion: "4"
           command: |
             deploy
             pages deploy pages --project-name fastsite
