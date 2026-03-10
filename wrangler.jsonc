@@ -12,21 +12,6 @@
 	},
 
 	/**
-	 * 本地测试环境
-	 */
-	"env": {
-    	"local": {
-			"d1_databases": [
-				{
-				"binding": "DB",
-				"database_name": "fastsite",
-				"database_id": "666db571-9a30-4284-bcd7-5468e37b876e"
-				}
-			]
-		}
-	},
-
-	/**
 	 * 远程生产环境
 	 */
 	"d1_databases": [
