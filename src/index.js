@@ -100,11 +100,16 @@ export default {
 		url.port = targetUrlObj.port;
 		// console.log(url);
 
+		const newHeaders = new Headers(request.headers);
+		if (url.host === 'api.github.com' && env.GITHUB_TOKEN) {
+			newHeaders.set('Authorization', `token ${env.GITHUB_TOKEN}`);
+		}
+
 		const modifiedRequest = new Request(url.toString(), {
-		  headers: request.headers,
-		  method: request.method,
-		  body: request.body,
-		  redirect: "follow"
+			headers: newHeaders,
+			method: request.method,
+			body: request.body,
+			redirect: "follow"
 		});
 		// console.log(modifiedRequest);
 

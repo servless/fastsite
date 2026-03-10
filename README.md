@@ -65,6 +65,26 @@ wrangler d1 execute fastsite --local --command="UPDATE fastsite SET target_url =
 wrangler d1 execute fastsite --local --command="DELETE FROM fastsite WHERE id = 1"
 ```
 
+### 配置 GitHub Token (可选)
+
+当 `target_url` 为 `https://api.github.com` 时，为避免触发 GitHub API 的速率限制（Rate Limit），建议配置 `GITHUB_TOKEN`。
+
+#### 1. 获取 Token
+前往 GitHub [Personal Access Tokens](https://github.com/settings/tokens) 页面创建一个新的 Token（建议选择 Fine-grained tokens 或经典的 repo 权限）。
+
+#### 2. 线上环境设置
+使用 `wrangler` 将 Token 存入 Cloudflare Workers 的 Secret 中：
+```bash
+wrangler secret put GITHUB_TOKEN
+```
+按照提示输入你的 Token 值。
+
+#### 3. 本地开发设置
+在项目根目录创建 `.dev.vars` 文件（此文件已被 `.gitignore` 忽略）：
+```env
+GITHUB_TOKEN=你的_github_token
+```
+
 ## 表结构说明
 
 ```bash
