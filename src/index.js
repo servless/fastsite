@@ -2,43 +2,81 @@
  * fastsite - 基于 Cloudflare Workers / Pages 的反向代理与站点加速
  * 
  * 主要功能：
- * - 基于 D1 数据库的高效域名与路径映射查询
+ * - 完全同步客户端业务请求头（支持 AI 各种鉴权密钥，如 Authorization, x-api-key, api-key 等）
+ * - 剔除导致上游 AI 服务 403 地区限制的透传头 (X-Forwarded-For / CF-IPCountry / CF-* 等)
+ * - 修正 Host / Origin / Referer 避免上游防盗链及 WAF 拦截
+ * - 基于 D1 数据库的高效域名与路径映射查询（参数化查询防 SQL 注入）
  * - 支持反向代理路径重写与参数合并
  * - 支持防代理逃逸的 Location 重定向重写
- * - 支持跨域请求 (CORS) 与 OPTIONS 预检
- * - 支持 GitHub Token 自动注入以防 API 限流
- * - 支持 Google CA (ACME) 目录地址重写
- * - 支持黑名单拦截与安全防护
+ * - 支持完整跨域 (CORS) 与 OPTIONS 预检
+ * - 支持 Server-Sent Events (SSE) 流式传输响应
  */
-
-// 禁止普通浏览器直接访问的目标域名名单
-const DISABLE_BROWSER_HOSTS = [
-	'github.com',
-	'gitlab.com',
-	'cloudflare.com',
-];
-
-// 常见浏览器 User-Agent 标识
-const BROWSER_UA_KEYWORDS = [
-	'Mozilla',
-	'AppleWebKit',
-	'Chrome',
-	'Safari',
-];
 
 /**
- * 判断目标 host 是否匹配指定域名（包含主域名及其子域名）
- * @param {string} host 
- * @param {string[]} targetList 
- * @returns {boolean}
+ * 需要被过滤或跳过的头部（逐跳头、Cloudflare 边缘头、客户端 IP/地区头）
+ * 1. 避免暴露客户端地区（如 CN）给 AI 服务商（OpenAI, Claude, Gemini 等）触发 403 地区受限。
+ * 2. 避免向上游 Cloudflare 节点发送伪造的 cf-* 头触发 WAF 403 拦截。
+ * 3. 避免 content-length 重新计算时冲突。
  */
-function isHostMatched(host, targetList) {
-	if (!host) return false;
-	const lowerHost = host.toLowerCase();
-	return targetList.some(item => {
-		const lowerItem = item.toLowerCase();
-		return lowerHost === lowerItem || lowerHost.endsWith('.' + lowerItem);
-	});
+const DROP_HEADERS = new Set([
+	// 逐跳头 (Hop-by-hop headers)
+	'connection',
+	'keep-alive',
+	'proxy-authenticate',
+	'proxy-authorization',
+	'te',
+	'trailers',
+	'transfer-encoding',
+	'upgrade',
+	// Cloudflare 边缘内部头
+	'cf-ray',
+	'cf-connecting-ip',
+	'cf-ipcountry',
+	'cf-visitor',
+	'cf-worker',
+	// 客户端 IP 透传头（清理以避免 AI 厂商识别受限地区导致 403）
+	'x-real-ip',
+	'x-forwarded-for',
+	'x-forwarded-proto',
+	'x-forwarded-host',
+	'x-forwarded-port',
+	'x-forwarded-server',
+	// 由底层依据 body 重新计算的头
+	'content-length',
+]);
+
+/**
+ * 构造同步发往上游目标服务器的请求头
+ * 完整同步客户端传递的所有业务头（包括各类 AI 密钥）
+ */
+function buildForwardHeaders(request, forwardUrl, env) {
+	const newHeaders = new Headers();
+
+	// 1. 完全同步客户端传递的所有原始请求头
+	for (const [key, value] of request.headers.entries()) {
+		const lowerKey = key.toLowerCase();
+		if (!DROP_HEADERS.has(lowerKey)) {
+			newHeaders.set(key, value);
+		}
+	}
+
+	// 2. 修正 Host 为目标服务器的主机名
+	newHeaders.set('Host', forwardUrl.host);
+
+	// 3. 处理 Origin 与 Referer，防止上游 AI 服务因跨域检测或防盗链校验而报 403
+	if (newHeaders.has('origin')) {
+		newHeaders.set('origin', forwardUrl.origin);
+	}
+	if (newHeaders.has('referer')) {
+		newHeaders.set('referer', forwardUrl.origin + '/');
+	}
+
+	// 4. GitHub API 兜底（仅在访问 api.github.com 且客户端未携带任何 Authorization 时注入）
+	if (forwardUrl.hostname === 'api.github.com' && env?.GITHUB_TOKEN && !newHeaders.has('authorization')) {
+		newHeaders.set('Authorization', `token ${env.GITHUB_TOKEN}`);
+	}
+
+	return newHeaders;
 }
 
 export default {
@@ -110,7 +148,7 @@ export default {
 	async fetch(request, env, ctx) {
 		const url = new URL(request.url);
 
-		// 1. 处理常用静态路由
+		// 1. 处理静态路由
 		switch (url.pathname) {
 			case "/robots.txt":
 				return new Response("User-agent: *\nDisallow: /", {
@@ -123,7 +161,7 @@ export default {
 				break;
 		}
 
-		// 2. 跨域 OPTIONS 预检请求直接放行
+		// 2. 跨域 OPTIONS 预检请求：完全放行所有方法和头部（支持 Authorization、x-api-key 等所有自定义头）
 		if (request.method.toUpperCase() === 'OPTIONS') {
 			return new Response(null, {
 				status: 204,
@@ -131,6 +169,8 @@ export default {
 					"Access-Control-Allow-Origin": "*",
 					"Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS",
 					"Access-Control-Allow-Headers": request.headers.get("Access-Control-Request-Headers") || "*",
+					"Access-Control-Expose-Headers": "*",
+					"Access-Control-Allow-Credentials": "true",
 					"Access-Control-Max-Age": "86400",
 				},
 			});
@@ -140,6 +180,8 @@ export default {
 		const visitUrls = [
 			`https://${url.host}`,
 			`http://${url.host}`,
+			`https://${url.host}/`,
+			`http://${url.host}/`,
 		];
 
 		// 支持 ?from= 参数指定源站点
@@ -147,7 +189,12 @@ export default {
 		if (fromParam) {
 			const cleanFrom = fromParam.replace(/^https?:\/\//i, '').replace(/\/+$/, '');
 			if (cleanFrom) {
-				visitUrls.push(`https://${cleanFrom}`, `http://${cleanFrom}`);
+				visitUrls.push(
+					`https://${cleanFrom}`,
+					`http://${cleanFrom}`,
+					`https://${cleanFrom}/`,
+					`http://${cleanFrom}/`
+				);
 			}
 		}
 
@@ -170,21 +217,7 @@ export default {
 			return new Response("Invalid target URL configured", { status: 502 });
 		}
 
-		// 5. 禁止浏览器直接访问特定站点（如防滥用）
-		if (isHostMatched(targetUrlObj.hostname, DISABLE_BROWSER_HOSTS)) {
-			const userAgent = request.headers.get('user-agent') || '';
-			const isBrowser = BROWSER_UA_KEYWORDS.some(keyword =>
-				userAgent.toLowerCase().includes(keyword.toLowerCase())
-			);
-			if (isBrowser) {
-				return new Response("不支持浏览器访问", {
-					status: 403,
-					headers: { "Content-Type": "text/plain; charset=utf-8" },
-				});
-			}
-		}
-
-		// 6. 构造目标 URL（正确拼接二级子路径与 Query 参数）
+		// 5. 构造目标 URL（正确拼接二级子路径与 Query 参数）
 		const forwardUrl = new URL(targetUrlObj.toString());
 		const basePath = forwardUrl.pathname.replace(/\/+$/, '');
 		const reqPath = url.pathname.replace(/^\/+/, '');
@@ -198,50 +231,46 @@ export default {
 			}
 		}
 
-		// 7. 处理反向代理请求头
-		const newHeaders = new Headers(request.headers);
-		newHeaders.set('Host', forwardUrl.host);
+		// 6. 完全同步并构造请求头
+		const newHeaders = buildForwardHeaders(request, forwardUrl, env);
 
-		// 注入标准转发头
-		const clientIp = request.headers.get('cf-connecting-ip') || request.headers.get('x-real-ip');
-		if (clientIp) {
-			const existingXFF = request.headers.get('x-forwarded-for');
-			newHeaders.set('x-forwarded-for', existingXFF ? `${existingXFF}, ${clientIp}` : clientIp);
-			newHeaders.set('x-real-ip', clientIp);
-		}
-		newHeaders.set('x-forwarded-proto', url.protocol.replace(':', ''));
-		newHeaders.set('x-forwarded-host', url.host);
-
-		// GitHub API 自动注入 Token（仅在客户端未传入 Authorization 时注入）
-		if (forwardUrl.hostname === 'api.github.com' && env?.GITHUB_TOKEN && !newHeaders.has('Authorization')) {
-			newHeaders.set('Authorization', `token ${env.GITHUB_TOKEN}`);
-		}
-
-		// 8. 构建转发请求（修复 GET/HEAD 携带 body 异常）
+		// 7. 构建转发请求
 		const reqMethod = request.method.toUpperCase();
 		const hasBody = !['GET', 'HEAD'].includes(reqMethod);
 
-		const modifiedRequest = new Request(forwardUrl.toString(), {
+		const requestInit = {
 			headers: newHeaders,
 			method: request.method,
 			body: hasBody ? request.body : null,
-			redirect: "follow",
-		});
+			redirect: "manual", // 避免自动跟随重定向导致跨域剥离 Authorization 等鉴权头
+		};
+		if (hasBody) {
+			requestInit.duplex = 'half';
+		}
 
-		// 9. 发起代理请求
+		const modifiedRequest = new Request(forwardUrl.toString(), requestInit);
+
+		// 8. 发起代理请求
 		let response;
 		try {
 			response = await fetch(modifiedRequest);
 		} catch (err) {
 			return new Response(`Bad Gateway: ${err?.message || 'Upstream fetch failed'}`, {
 				status: 502,
-				headers: { "Content-Type": "text/plain; charset=utf-8" },
+				headers: {
+					"Content-Type": "text/plain; charset=utf-8",
+					"Access-Control-Allow-Origin": "*",
+				},
 			});
 		}
 
-		// 10. 处理响应头与重写
+		// 9. 处理响应头（完整注入 CORS 支持）
 		const responseHeaders = new Headers(response.headers);
 		responseHeaders.set("Access-Control-Allow-Origin", "*");
+		responseHeaders.set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS");
+		responseHeaders.set("Access-Control-Allow-Headers", "*");
+		responseHeaders.set("Access-Control-Expose-Headers", "*");
+		responseHeaders.set("Access-Control-Allow-Credentials", "true");
 
 		// 防代理逃逸：重定向 Location 重写
 		const locationHeader = responseHeaders.get("Location");
@@ -259,7 +288,7 @@ export default {
 			}
 		}
 
-		// 11. Google CA (ACME) Directory 内容重写
+		// 10. Google CA (ACME) Directory 内容重写
 		const isGoogleCa = forwardUrl.hostname === 'dv.acme-v02.api.pki.goog' || forwardUrl.hostname === 'dv.acme-v02.test-api.pki.goog';
 		if (isGoogleCa && forwardUrl.pathname.endsWith('/directory')) {
 			const text = await response.text();
@@ -274,7 +303,7 @@ export default {
 			});
 		}
 
-		// 12. 针对 204 No Content / 304 Not Modified 不返回 Body
+		// 11. 针对 204 No Content / 304 Not Modified 不返回 Body
 		if (response.status === 204 || response.status === 304) {
 			return new Response(null, {
 				status: response.status,
@@ -283,6 +312,7 @@ export default {
 			});
 		}
 
+		// 12. 流式支持（如 AI SSE 事件流），原样透传 body 流
 		return new Response(response.body, {
 			status: response.status,
 			statusText: response.statusText,

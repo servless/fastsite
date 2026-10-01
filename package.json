@@ -1,6 +1,7 @@
 {
 	"name": "fastsite",
 	"version": "0.1.1",
+	"type": "module",
 	"private": true,
 	"scripts": {
 		"deploy": "wrangler deploy",
